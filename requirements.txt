@@ -15,3 +15,6 @@ pikepdf==8.12.0
 pypdf==4.0.1
 unstructured.pytesseract==0.3.12
 pytesseract
+scikit-learn
+gensim
+scipy==1.12
