@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation for SageMaker Studio and OpenSearch with automatic Nori Plugin association in us-west-2
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  SageMakerExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-studio-permissions'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                Resource: 
+                  - "arn:aws:s3:::*/*"
+
+  StudioDomain:
+    Type: AWS::SageMaker::Domain
+    Properties:
+      DomainName: !Sub "${AWS::StackName}-SageMakerDomain"
+      AuthMode: IAM
+      VpcId: !Ref VPC
+      SubnetIds: 
+        - !Ref PublicSubnet
+      AppNetworkAccessType: PublicInternetOnly
+      DefaultUserSettings:
+        ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
+
+  StudioUserProfile:
+    Type: AWS::SageMaker::UserProfile
+    DependsOn: 
+      - StudioDomain
+    Properties:
+      DomainId: !Ref StudioDomain
+      UserProfileName: WorkshopUser
+      UserSettings: 
+        ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
+
+  OpenSearchDomain:
+    Type: "AWS::OpenSearchService::Domain"
+    Properties:
+      DomainName: !Sub "rag-hol-${AWS::StackName}"
+      EngineVersion: "OpenSearch_2.11"
+      ClusterConfig:
+        InstanceType: "r6g.large.search"
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+        ZoneAwarenessEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: "gp3"
+        VolumeSize: 100
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      EncryptionAtRestOptions:
+        Enabled: true
+      AdvancedSecurityOptions:
+        Enabled: true
+        InternalUserDatabaseEnabled: true
+        MasterUserOptions:
+          MasterUserName: "raguser"
+          MasterUserPassword: "MarsEarth1!"
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: "Policy-Min-TLS-1-2-2019-07"
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: "es:*"
+            Resource: "*"
+        
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: OpenSearchAndLogsAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "es:AssociatePackage"
+                  - "es:DescribePackages"
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+
+  OpenSearchNoriFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Timeout: 300
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import cfnresponse
+
+          def lambda_handler(event, context):
+              client = boto3.client('opensearch')
+              domain_name = f"rag-hol-{os.environ['AWS_STACK_NAME']}"
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      response = client.associate_package(
+                          PackageID='G79602591',  # Nori plugin Package ID for us-west-2 and version 2.11
+                          DomainName=domain_name
+                      )
+                      filtered_response = {
+                          key: value for key, value in response.items() if key in ['Status', 'PackageID']
+                      }
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Data': filtered_response})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Message': str(e)})
+      Runtime: python3.11
+      Environment:
+        Variables:
+          AWS_STACK_NAME: !Ref "AWS::StackName"
+
+  OpenSearchPackageAssociation:
+    Type: Custom::OpenSearchNoriPlugin
+    Properties:
+      ServiceToken: !GetAtt OpenSearchNoriFunction.Arn
+      DomainName: !Ref OpenSearchDomain
+    DependsOn: OpenSearchDomain
+
+Outputs:
+  SageMakerConsoleLink:
+    Description: SageMaker Studio console link
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/
+  
+  DomainEndpoint:
+    Description: "Endpoint for the OpenSearch domain."
+    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+
+  DashboardURL:
+    Description: "URL to access the OpenSearch Dashboards."
+    Value: !Sub "https://${OpenSearchDomain.DomainEndpoint}:443/app/opensearch_dashboards"
+
+  UserID:
+    Description: "User ID for OpenSearch domain."
+    Value: "raguser"
+
+  UserPassword:
+    Description: "Password for OpenSearch domain."
+    Value: "MarsEarth1!"
