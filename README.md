@@ -16,7 +16,7 @@
 2. **프롬프트 엔지니어링 - 실전편**
    - `PromptEngineering/1.langchain-claude3-guide.ipynb`
    - `PromptEngineering/2.review-analysis.ipynb`
-   - `PromptEngineering/3.image-to-text.ipynb`
+   - `PromptEngineering/3.multimodal-prompt.ipynb`
 
 3. **벡터 임베딩 활용**
    - `Embedding/1.count-vector.ipynb`
