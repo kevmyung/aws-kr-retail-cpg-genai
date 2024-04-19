@@ -186,32 +186,32 @@ Resources:
   OpenSearchDomainEndpointParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_domain_endpoint"
+      Name: "opensearch_domain_endpoint2"
       Type: "String"
       Value: !GetAtt OpenSearchDomain.DomainEndpoint
 
   OpenSearchUserIDParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_user_id"
+      Name: "opensearch_user_id2"
       Type: "String"
       Value: "raguser"
 
   OpenSearchUserPasswordParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_user_password"
+      Name: "opensearch_user_password2"
       Type: "String"
       Value: "MarsEarth1!"
 
 Outputs:
   SageMakerConsoleLink:
-    Description: SageMaker Studio console link
-    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/
+    Description: "SageMaker Studio console link"
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/"
   
   DomainEndpoint:
     Description: "Endpoint for the OpenSearch domain."
-    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Value: !Sub "https://${OpenSearchDomain.DomainEndpoint}"
 
   DashboardURL:
     Description: "URL to access the OpenSearch Dashboards."
