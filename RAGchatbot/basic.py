@@ -5,7 +5,6 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 
-region_name = 'us-east-1'
 
 ###### 스트리밍 응답 처리 ######
 class StreamHandler(BaseCallbackHandler):
@@ -28,7 +27,7 @@ def get_conversation(chat_box, model_id):
     llmchat = BedrockChat(
         model_id=model_id,
         streaming=True,
-        region_name=region_name,
+        region_name="us-west-2",
         callbacks=[stream_handler], 
         model_kwargs={
             "anthropic_version": "bedrock-2023-05-31",
