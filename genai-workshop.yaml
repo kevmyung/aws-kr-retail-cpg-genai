@@ -57,20 +57,8 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: /
-      Policies:
-        - PolicyName: !Sub '${AWS::StackName}-studio-permissions'
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:ListMultipartUploadParts
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:AbortMultipartUpload
-                  - s3:GetBucketLocation
-                Resource: 
-                  - "arn:aws:s3:::*/*"
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
 
   StudioDomain:
     Type: AWS::SageMaker::Domain
@@ -194,6 +182,27 @@ Resources:
       ServiceToken: !GetAtt OpenSearchNoriFunction.Arn
       DomainName: !Ref OpenSearchDomain
     DependsOn: OpenSearchDomain
+
+  OpenSearchDomainEndpointParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "opensearch_domain_endpoint"
+      Type: "String"
+      Value: !GetAtt OpenSearchDomain.DomainEndpoint
+
+  OpenSearchUserIDParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "opensearch_user_id"
+      Type: "String"
+      Value: "raguser"
+
+  OpenSearchUserPasswordParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "opensearch_user_password"
+      Type: "String"
+      Value: "MarsEarth1!"
 
 Outputs:
   SageMakerConsoleLink:
