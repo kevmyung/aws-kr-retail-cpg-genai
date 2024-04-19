@@ -21,14 +21,14 @@ from PIL import Image
 from io import BytesIO
 import matplotlib.pyplot as plt
 
-from utils import print_ww
-from utils.opensearch import opensearch_utils
+from . import print_ww
+from .opensearch import opensearch_utils
 
 from langchain.schema import Document
 from langchain.chains import RetrievalQA
 from langchain.schema import BaseRetriever
 from langchain.prompts import PromptTemplate
-from langchain.retrievers import AmazonKendraRetriever
+#from langchain.retrievers import AmazonKendraRetriever
 from langchain_core.tracers import ConsoleCallbackHandler
 from langchain.schema.output_parser import StrOutputParser
 from langchain.embeddings import SagemakerEndpointEmbeddings
