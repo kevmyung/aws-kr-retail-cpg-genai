@@ -34,7 +34,16 @@
 
 6. 하단의 **I acknowledge that AWS CloudFormation might create IAM resources** 체크 박스를 선택한 후, **Submit** 버튼을 누릅니다.
 
-8. 자원 생성 완료까지 약 30분 소요됩니다.
+7. 자원 생성 완료까지 약 30분 소요됩니다.
+
+## [Optional] 파일 업로드가 안되는 경우
+1. Console 하단 CloudShell 오픈
+2. 아래 명령어 실행
+```shell
+git clone https://github.com/kevmyung/aws-kr-retail-cpg-genai.git
+aws cloudformation create-stack --stack-name gen-ai-workshop --template-body file://aws-kr-retail-cpg-genai/genai-workshop.yaml --capabilities CAPABILITY_NAMED_IAM
+```
+
 
 ## Step 3. Bedrock 초기 설정
 
