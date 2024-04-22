@@ -186,21 +186,21 @@ Resources:
   OpenSearchDomainEndpointParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_domain_endpoint2"
+      Name: "opensearch_domain_endpoint"
       Type: "String"
       Value: !GetAtt OpenSearchDomain.DomainEndpoint
 
   OpenSearchUserIDParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_user_id2"
+      Name: "opensearch_user_id"
       Type: "String"
       Value: "raguser"
 
   OpenSearchUserPasswordParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "opensearch_user_password2"
+      Name: "opensearch_user_password"
       Type: "String"
       Value: "MarsEarth1!"
 
