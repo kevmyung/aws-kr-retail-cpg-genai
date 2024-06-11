@@ -1,18 +1,21 @@
 from typing import List, Union
+import json
 import base64
+import boto3
 from io import BytesIO
 from PIL import Image, UnidentifiedImageError
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from .models import ChatModel
-from .opensearch import OpenSearchClient
 import os
 import tempfile
 import pdfplumber
+from pdf2image import convert_from_path
+from PIL import Image
 import streamlit as st
 
 FAISS_PATH = './vectorstore/db_faiss'
+FAISS_ORIGIN = './vectorstore/pdf' 
 INDEX_FILE = 'index.faiss'
 
 def process_uploaded_files(uploaded_files: List[st.runtime.uploaded_file_manager.UploadedFile], message_images_list: List[str], uploaded_file_ids: List[str]) -> List[Union[dict, str]]:
@@ -74,29 +77,53 @@ def process_uploaded_files(uploaded_files: List[st.runtime.uploaded_file_manager
 
     return content_files
 
-def faiss_preprocess_document(uploaded_files: List[st.runtime.uploaded_file_manager.UploadedFile], chat_model: ChatModel) -> FAISS:
+
+def pdf_to_images(pdf_filepath):
+    output_folder = os.path.splitext(pdf_filepath)[0] + "_images"
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    try:
+        images = convert_from_path(pdf_filepath)
+        for i, image in enumerate(images):
+            image_filename = os.path.join(output_folder, f"page_{i}.png")
+            print(f"Image saved in {image_filename}.")
+            image.save(image_filename, "PNG")
+    except Exception as e:
+        print(f"Failed to convert PDF to images: {e}")
+
+
+def faiss_preprocess_document(uploaded_files: List[st.runtime.uploaded_file_manager.UploadedFile], chat_model, upload_message) -> FAISS:
     if uploaded_files:
         docs = []
-        temp_dir = tempfile.TemporaryDirectory()
+        if not os.path.exists(FAISS_ORIGIN):
+            os.makedirs(FAISS_ORIGIN)
         for file in uploaded_files:
-            temp_filepath = os.path.join(temp_dir.name, file.name)
-            with open(temp_filepath, "wb") as f:
+            pdf_path = os.path.join(FAISS_ORIGIN, file.name)
+            with open(pdf_path, "wb") as f:
                 f.write(file.getvalue())
-            loader = PyPDFLoader(temp_filepath)
+            loader = PyPDFLoader(pdf_path)
             docs.extend(loader.load())
+
+            pdf_to_images(pdf_path)
 
         # chunking
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
         # embed & store
-        vectordb = FAISS.from_documents(documents=splits, embedding=chat_model.emb)
-        vectordb.save_local(FAISS_PATH)
-        st.session_state['vector_empty'] = False
+        if st.session_state['vector_empty'] == False:
+            vectordb = FAISS.load_local(folder_path=FAISS_PATH, embeddings=chat_model.emb, allow_dangerous_deserialization=True)
+            vectordb.add_documents(documents=splits, embeddings=chat_model.emb)
+            vectordb.save_local(FAISS_PATH)
+        else:
+            vectordb = FAISS.from_documents(documents=splits, embedding=chat_model.emb)
+            vectordb.save_local(FAISS_PATH)
+            st.session_state['vector_empty'] = False
 
         retriever = vectordb.as_retriever(search_type="mmr", search_kwargs={"k": 2, "fetch_k": 4})
         with st.sidebar:
-            st.write("지식기반 업데이트가 완료됐어요. X를 눌해 파일을 닫아주세요. 업로드 된 파일에 대해 질문하거나, 추가로 업로드해도 좋습니다.")
+            st.success(upload_message)
     else:
         if os.path.exists(f"{FAISS_PATH}/{INDEX_FILE}"):
             vectordb = FAISS.load_local(folder_path=FAISS_PATH, embeddings=chat_model.emb, allow_dangerous_deserialization=True)
@@ -104,11 +131,9 @@ def faiss_preprocess_document(uploaded_files: List[st.runtime.uploaded_file_mana
             st.session_state['vector_empty'] = False
         else:
             retriever = None
-    return retriever
+    return retriever    
 
-
-def opensearch_preprocess_document(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile, chat_model: ChatModel, os_client: OpenSearchClient):
-
+def opensearch_preprocess_document(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile, os_client, upload_message):
     if uploaded_file:
         if not os_client.is_index_present():
             os_client.create_index()
@@ -130,7 +155,7 @@ def opensearch_preprocess_document(uploaded_file: st.runtime.uploaded_file_manag
         st.session_state['vector_empty'] = False
         
         with st.sidebar:
-            st.write("지식기반 업데이트가 완료됐어요. X를 눌해 파일을 닫아주세요. 업로드 된 파일에 대해 질문하거나, 추가로 업로드해도 좋습니다.")
+            st.success(upload_message)
     else:
         if os_client.is_index_present(): 
             st.session_state['vector_empty'] = False
@@ -142,14 +167,97 @@ def opensearch_reset_on_click() -> None:
         if os_client.is_index_present():
             os_client.delete_index()
     st.session_state['vector_empty'] = True
-    st.success("지식기반이 초기화 됐습니다.")
+    st.success(st.session_state['clean_kb_message'])
 
 
 def reset_faiss_index() -> None:
     import shutil
     shutil.rmtree(FAISS_PATH, ignore_errors=True)
+    shutil.rmtree(FAISS_ORIGIN, ignore_errors=True)
     st.session_state['vector_empty'] = True
-    st.success("지식기반이 초기화 됐습니다.")
+    st.success(st.session_state['clean_kb_message'])
 
 def faiss_reset_on_click() -> None:
     reset_faiss_index()
+
+
+def store_schema_description(dynamodb, schema_file, schema_table):
+    with open(schema_file, 'r') as file:
+        data = json.load(file)
+    
+    table = dynamodb.Table(schema_table)
+    seen_keys = set()
+    duplicates = [] 
+    with table.batch_writer() as batch:
+        for item in data:
+            for table_name, details in item.items():
+                if table_name in seen_keys:
+                    duplicates.append(table_name)
+                else:
+                    seen_keys.add(table_name)
+                    batch.put_item(Item={
+                        'TableName': table_name,
+                        'Description': details['table_desc'],
+                        'Columns': details['cols']
+                    })
+    if duplicates:
+        print(f"Duplicate tables found in schema file: {', '.join(duplicates)}")
+
+
+def sample_query_indexing(os_client, lang_config):
+    rag_query_file = st.text_input(lang_config['rag_query_file'], value="libs/example_queries.json")
+    if not os.path.exists(rag_query_file):
+        st.warning(lang_config['file_not_found'])
+        return
+
+    if st.sidebar.button(lang_config['process_file'], key='query_file_process'):
+        with st.spinner("Now processing..."):
+            os_client.delete_index()
+            os_client.create_index() 
+
+            with open(rag_query_file, 'r') as file:
+                bulk_data = file.read()
+
+            response = os_client.conn.bulk(body=bulk_data)
+            if response["errors"]:
+                st.error("Failed")
+            else:
+                st.success("Success")
+
+
+def schema_desc_indexing(os_client, lang_config):
+    schema_file = st.text_input(lang_config['schema_file'], value="libs/default-schema.json")               
+    if not os.path.exists(schema_file):
+        st.warning(lang_config['file_not_found'])
+        return
+
+    if st.sidebar.button(lang_config['process_file'], key='schema_file_process'):
+        with st.spinner("Now processing..."):
+            os_client.delete_index()
+            os_client.create_index() 
+
+            with open(schema_file, 'r') as file:
+                schema_data = json.load(file)
+
+            bulk_data = []
+            for table in schema_data:
+                for table_name, table_info in table.items():
+                    table_doc = {
+                        "table_name": table_name,
+                        "table_desc": table_info["table_desc"],
+                        "columns": [{"col_name": col["col"], "col_desc": col["col_desc"]} for col in table_info["cols"]]
+                    }
+                    bulk_data.append({"index": {"_index": os_client.index_name, "_id": table_name}})
+                    bulk_data.append(table_doc)
+            
+            bulk_data_str = '\n'.join(json.dumps(item) for item in bulk_data) + '\n'
+
+            response = os_client.conn.bulk(body=bulk_data_str)
+            if response["errors"]:
+                st.error("Failed")
+            else:
+                st.success("Success")
+    
+
+
+
