@@ -7,7 +7,7 @@ settings:
   index.knn: true
   index.knn.algo_param.ef_search: 512
 
-mappings:
+mappings-rag:
   properties:
     metadata:
       properties:
@@ -22,7 +22,7 @@ mappings:
       analyzer: nori
     vector_field:
       type: knn_vector
-      dimension: 1536
+      dimension: 1024
       method:
         engine: faiss
         name: hnsw
