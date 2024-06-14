@@ -35,7 +35,7 @@ aws cloudformation create-stack --stack-name gen-ai-workshop --template-body fil
 ```
 
 
-## Step 3. 실습 자원 배포
+## Step 3. 자원 배포 상태 확인
 1. [CloudFormation 콘솔](https://us-west-2.console.aws.amazon.com/cloudformation)에서 자원 배포상태가 `CREATE_IN_PROGRESS`인지 확인합니다.
 
 2. 자원 생성 완료까지 약 30분 소요됩니다.
