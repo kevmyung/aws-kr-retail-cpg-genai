@@ -31,32 +31,17 @@
 ```shell
 git clone https://github.com/kevmyung/aws-kr-retail-cpg-genai.git
 aws cloudformation create-stack --stack-name gen-ai-workshop --template-body file://aws-kr-retail-cpg-genai/genai-workshop.yaml --capabilities CAPABILITY_NAMED_IAM
+
 ```
 
-4. [CloudFormation 콘솔](https://us-west-2.console.aws.amazon.com/cloudformation)에서 자원 배포상태가 `CREATE_IN_PROGRESS`인지 확인합니다.
 
-5. 자원 생성 완료까지 약 30분 소요됩니다.
+## Step 3. 실습 자원 배포
+1. [CloudFormation 콘솔](https://us-west-2.console.aws.amazon.com/cloudformation)에서 자원 배포상태가 `CREATE_IN_PROGRESS`인지 확인합니다.
 
-
-## [Optional] CloudFormation 스택을 콘솔에서 생성하는 경우
-1. `genai-workshop.yaml` 파일을 [다운로드](https://github.com/kevmyung/aws-kr-retail-cpg-genai/blob/main/genai-workshop.yaml)합니다.
-
-2. [CloudFormation 콘솔](https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/create)로 이동합니다.
-
-3. **Oregon (us-west-2) 리전**에서 실습 진행 여부를 확인합니다.
-
-4. **Upload a template file**을 선택 후, 다운로드 받은 `genai-workshop.yaml` 파일을 업로드하고, **Next** 버튼을 클릭합니다.
-   
-   ![CloudFormation Template Upload](./images/CloudFormation-1.png)
-
-5. Stack name으로 `gen-ai-workshop`을 입력하고, **Next** 버튼을 클릭합니다.
-
-6. 하단의 **I acknowledge that AWS CloudFormation might create IAM resources** 체크 박스를 선택한 후, **Submit** 버튼을 누릅니다.
-
-7. 자원 생성 완료까지 약 30분 소요됩니다.
+2. 자원 생성 완료까지 약 30분 소요됩니다.
 
 
-## Step 3. Bedrock 초기 설정
+## Step 4. Bedrock 초기 설정
 
 1. [Bedrock 콘솔](https://us-west-2.console.aws.amazon.com/bedrock/home?region=us-west-2#/)로 이동합니다.
 
